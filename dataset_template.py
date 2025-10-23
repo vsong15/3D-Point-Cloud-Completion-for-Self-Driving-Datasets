@@ -1,4 +1,3 @@
-# dataset_template.py
 import os, glob, numpy as np, torch
 from torch.utils.data import Dataset, DataLoader
 
