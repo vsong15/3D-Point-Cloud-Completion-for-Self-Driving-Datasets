@@ -2,11 +2,14 @@ import numpy as np
 import open3d as o3d
 import matplotlib.pyplot as plt
 from tqdm import tqdm
+import os
 
-def generate_random_point_cloud(num_points=1000, seed=42):
+OUTPUT_DIR = "pointclouds"
+os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def generate_random_point_cloud(num_points=2000, seed=42):
     np.random.seed(seed)
-    points = np.random.uniform(-1, 1, size=(num_points, 3))
-    return points
+    return np.random.uniform(-1, 1, size=(num_points, 3))
 
 def visualize_with_open3d(points):
     pcd = o3d.geometry.PointCloud()
@@ -21,19 +24,24 @@ def visualize_with_matplotlib(points):
     plt.show()
 
 def save_as_ply(points, filename="dummy_pointcloud.ply"):
+    filepath = os.path.join(OUTPUT_DIR, filename)
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
-    o3d.io.write_point_cloud(filename, pcd)
-    print(f"[INFO] Saved dummy point cloud to {filename}")
+    o3d.io.write_point_cloud(filepath, pcd)
+    print(f"[INFO] Saved dummy point cloud to {filepath}")
 
 if __name__ == "__main__":
     print("[INFO] Generating random 3D points...")
     for _ in tqdm(range(3), desc="Setting up environment"):
         pass
+
     points = generate_random_point_cloud(num_points=2000)
     save_as_ply(points)
+
     print("[INFO] Visualizing using Open3D...")
     visualize_with_open3d(points)
+
     print("[INFO] Visualizing using Matplotlib...")
     visualize_with_matplotlib(points)
+
     print("[DONE] Visualization test completed successfully!")
