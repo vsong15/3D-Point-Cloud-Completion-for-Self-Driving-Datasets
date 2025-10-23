@@ -1,0 +1,16 @@
+name: pointcloud3d
+channels:
+  - conda-forge
+dependencies:
+  - python=3.10
+  - pip>=23.0
+  - numpy
+  - pandas
+  - matplotlib
+  - tqdm
+  - jupyterlab
+  - pip:
+      - open3d>=0.18
+      - scikit-learn
+      - typing-extensions
+      - wandb
