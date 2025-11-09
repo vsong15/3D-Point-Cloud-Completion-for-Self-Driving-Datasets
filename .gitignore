@@ -1,0 +1,8 @@
+# Ignore large dataset files
+data/
+*.tfrecord
+*.parquet
+*.zip
+*.tar
+*.npy
+*.npz
