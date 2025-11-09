@@ -1,5 +1,7 @@
 # Ignore large dataset files
 data/
+__pycache__/
+*.pyc
 *.tfrecord
 *.parquet
 *.zip
