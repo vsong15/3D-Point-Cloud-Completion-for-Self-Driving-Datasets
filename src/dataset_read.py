@@ -70,7 +70,12 @@ def read_and_process_lidar(parquet_path, target_timestamp=None):
         # Read the parquet file
         table = pq.read_table(parquet_path)
         df = table.to_pandas()
-        
+
+        # Print available columns for debugging (helpful to verify parquet layout)
+        print("\nPoint parquet columns:")
+        for col in df.columns:
+            print(f"- {col}")
+
         # Get unique timestamps
         timestamps = df['key.frame_timestamp_micros'].unique()
         print(f"\nFound {len(timestamps)} timestamps in the dataset:")
@@ -96,7 +101,14 @@ def read_and_process_lidar(parquet_path, target_timestamp=None):
         for idx in range(len(df_timestamp)):
             laser_name = df_timestamp['key.laser_name'].iloc[idx]
             print(f"\nProcessing laser {laser_name}...")
-            
+            # Print raw range-image shape info for diagnostics
+            try:
+                v1 = df_timestamp['[LiDARComponent].range_image_return1.values'].iloc[idx]
+                s1 = df_timestamp['[LiDARComponent].range_image_return1.shape'].iloc[idx]
+                print(f"  return1 shape: {s1}, values length: {None if v1 is None else len(v1)}")
+            except Exception:
+                pass
+
             # Process first returns
             values1 = df_timestamp['[LiDARComponent].range_image_return1.values'].iloc[idx]
             shape1 = df_timestamp['[LiDARComponent].range_image_return1.shape'].iloc[idx]
@@ -104,7 +116,7 @@ def read_and_process_lidar(parquet_path, target_timestamp=None):
             points1 = process_range_image(values1, shape1)
             if points1 is not None:
                 all_points.append(points1)
-            
+
             # Process second returns if they exist
             values2 = df_timestamp['[LiDARComponent].range_image_return2.values'].iloc[idx]
             if len(values2) > 0:  # Only process if there are second returns
@@ -119,6 +131,15 @@ def read_and_process_lidar(parquet_path, target_timestamp=None):
             combined_points = np.vstack(all_points)
             print(f"\nTotal points for timestamp {target_timestamp}: {len(combined_points)}")
             return combined_points
+        # Fallback: if dataframe contains explicit XYZ columns, use them
+        # (some Waymo/parquet exports include flattened point lists)
+        if 'x' in df_timestamp.columns and 'y' in df_timestamp.columns and 'z' in df_timestamp.columns:
+            try:
+                pts = df_timestamp[['x', 'y', 'z']].values
+                print(f"Using explicit x,y,z columns as fallback, loaded {len(pts)} points")
+                return pts
+            except Exception:
+                pass
         return None
         
     except Exception as e:
