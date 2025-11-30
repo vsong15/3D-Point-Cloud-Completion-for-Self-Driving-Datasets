@@ -138,10 +138,13 @@ def read_lidar_boxes(parquet_path, target_timestamp=None):
 
             center_x = -row["[LiDARBoxComponent].box.center.x"]
             center_z = row["[LiDARBoxComponent].box.center.z"] - LIDAR_HEIGHT
+
+            SHIFT_X = 1.6
+            SHIFT_Z = -3.0
             center = [
-                center_x,
+                center_x + SHIFT_X,
                 row["[LiDARBoxComponent].box.center.y"],
-                center_z
+                center_z + SHIFT_Z  
             ]
 
             heading = row["[LiDARBoxComponent].box.heading"] + np.pi
