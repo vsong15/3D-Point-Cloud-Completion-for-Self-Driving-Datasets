@@ -5,8 +5,8 @@ import pyarrow.parquet as pq
 import numpy as np
 from sklearn.cluster import DBSCAN
 
-LIDAR_DIR = "data/training/40_training_lidar"
-BOX_DIR    = "data/training/40_training_lidar_box"
+LIDAR_DIR = "data/training/254_training_lidar"
+BOX_DIR    = "data/training/254_training_lidar_box"
 OUTPUT_DIR = "vehicles_out"
 ALL_VEH_DIR = "all_vehicle_point_clouds"
 
