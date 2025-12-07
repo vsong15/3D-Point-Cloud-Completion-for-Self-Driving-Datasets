@@ -7,5 +7,5 @@ __pycache__/
 *.parquet
 *.zip
 *.tar
-*.npy
 *.npz
+*.jpg
