@@ -1,6 +1,6 @@
 # Ignore large dataset files
 data/
-vehicles_out/
+vehicles_out*/
 __pycache__/
 *.pyc
 *.tfrecord
