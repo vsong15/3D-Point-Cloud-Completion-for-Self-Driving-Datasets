@@ -7,8 +7,8 @@ from sklearn.cluster import DBSCAN
 
 LIDAR_DIR = "data/training/254_training_lidar"
 BOX_DIR    = "data/training/254_training_lidar_box"
-OUTPUT_DIR = "vehicles_out/vehicles_out_500_min_points"
-ALL_VEH_DIR = "waymo_vehicle_incomplete_pointclouds/all_vehicle_point_clouds_500_min_points"
+OUTPUT_DIR = "vehicles_out/vehicles_out_1000_min_points"
+ALL_VEH_DIR = "waymo_vehicle_incomplete_pointclouds/all_vehicle_point_clouds_1000_min_points"
 
 LIDAR_HEIGHT = 2.0
 SHIFT_X = 1.6
@@ -173,7 +173,7 @@ def assign_box_colors(pcd, obbs, box_colors):
     pcd.colors = o3d.utility.Vector3dVector(final_colors)
     return pcd
 
-def extract_top_vehicles(pcd, obbs, box_colors, box_types, top_n=10, min_points=500):
+def extract_top_vehicles(pcd, obbs, box_colors, box_types, top_n=10, min_points=1000):
     points = np.asarray(pcd.points)
     colors = np.asarray(pcd.colors)
     vehicles = []
