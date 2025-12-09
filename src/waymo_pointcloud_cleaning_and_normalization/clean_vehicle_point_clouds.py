@@ -4,8 +4,8 @@ import open3d as o3d
 from sklearn.cluster import DBSCAN
 
 FILE_PATH = None
-FOLDER_PATH = "waymo_vehicle_incomplete_pointclouds/all_vehicle_point_clouds_200_min_points"
-OUTPUT_FOLDER = "waymo_vehicle_cleaned_pointclouds/all_vehicle_point_clouds_200_min_points_cleaned"
+FOLDER_PATH = "waymo_vehicle_incomplete_pointclouds/all_vehicle_point_clouds_500_min_points"
+OUTPUT_FOLDER = "waymo_vehicle_cleaned_pointclouds/all_vehicle_point_clouds_500_min_points_cleaned"
 MAX_DIAGONAL = 4.0
 PLANAR_THRESHOLD = 0.01  
 
