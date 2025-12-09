@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 from scipy.spatial import cKDTree
 
-GROUND_TRUTH_FOLDER = "waymo_vehicle_ground_truth_occluded/all_vehicle_point_clouds_1000_min_points_occluded_gt"
+GROUND_TRUTH_FOLDER = "waymo_vehicle_ground_truth_occluded/all_vehicle_point_clouds_50_min_points_occluded_gt"
 INCOMPLETE_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "incomplete").replace("\\", "/")
 COMPLETED_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "completed").replace("\\", "/")
 
