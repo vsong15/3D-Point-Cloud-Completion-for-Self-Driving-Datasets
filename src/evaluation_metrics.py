@@ -9,20 +9,21 @@ try:
 except ImportError:
     TORCH_AVAILABLE = False
 
+try:
+    from extensions.emd.emd_module import emdModule
+    EMD_AVAILABLE = True
+except Exception:
+    EMD_AVAILABLE = False
+
 
 def _pairwise_distances_np(a: np.ndarray, b: np.ndarray) -> np.ndarray:
     diff = a[:, None, :] - b[None, :, :]
     return np.sum(diff * diff, axis=-1)
 
 
-def chamfer_distance_np(pred: np.ndarray,
-                        target: np.ndarray,
-                        squared: bool = False) -> float:
+def chamfer_distance_np(pred: np.ndarray, target: np.ndarray, squared: bool = False) -> float:
     pred = np.asarray(pred, dtype=np.float32)
     target = np.asarray(target, dtype=np.float32)
-
-    if pred.size == 0 or target.size == 0:
-        raise ValueError("Chamfer distance undefined for empty point clouds.")
 
     d1 = _pairwise_distances_np(pred, target)
     d2 = _pairwise_distances_np(target, pred)
@@ -34,14 +35,9 @@ def chamfer_distance_np(pred: np.ndarray,
     return float(cd if squared else np.sqrt(cd))
 
 
-def fscore_np(pred: np.ndarray,
-              target: np.ndarray,
-              tau: float = 0.05) -> Tuple[float, float, float]:
+def fscore_np(pred: np.ndarray, target: np.ndarray, tau: float = 0.05) -> Tuple[float, float, float]:
     pred = np.asarray(pred, dtype=np.float32)
     target = np.asarray(target, dtype=np.float32)
-
-    if pred.size == 0 or target.size == 0:
-        raise ValueError("F-score undefined for empty point clouds.")
 
     d1 = _pairwise_distances_np(pred, target)
     d2 = _pairwise_distances_np(target, pred)
@@ -56,25 +52,23 @@ def fscore_np(pred: np.ndarray,
     return f, p, r
 
 
-def _ensure_torch():
+def emd_np(pred: np.ndarray, target: np.ndarray) -> float:
+    pred = np.asarray(pred, dtype=np.float32)
+    target = np.asarray(target, dtype=np.float32)
+
+    d = _pairwise_distances_np(pred, target)
+    assigned = np.min(d, axis=1)
+    return float(np.mean(np.sqrt(assigned)))
+
+
+def chamfer_distance_torch(pred, target, squared: bool = False, reduction: str = "mean"):
     if not TORCH_AVAILABLE:
         raise ImportError("PyTorch not available.")
-
-
-def chamfer_distance_torch(pred,
-                           target,
-                           squared: bool = False,
-                           reduction: str = "mean"):
-    _ensure_torch()
-    import torch
 
     if pred.ndim == 2:
         pred = pred.unsqueeze(0)
     if target.ndim == 2:
         target = target.unsqueeze(0)
-
-    if pred.shape[0] != target.shape[0]:
-        raise ValueError("Batch size mismatch.")
 
     diff = pred.unsqueeze(2) - target.unsqueeze(1)
     d = torch.sum(diff * diff, dim=-1)
@@ -96,28 +90,9 @@ def chamfer_distance_torch(pred,
     raise ValueError("Invalid reduction type.")
 
 
-def fscore_torch(pred,
-                 target,
-                 tau: float = 0.05,
-                 reduction: str = "mean"):
-    _ensure_torch()
-    import torch
-
-    if pred.ndim == 2:
-        pred = pred.unsqueeze(0)
-    if target.ndim == 2:
-        target = target.unsqueeze(0)
-
-    diff = pred.unsqueeze(2) - target.unsqueeze(1)
-    d = torch.sum(d * 0 + diff * diff, dim=-1)  # avoid unused warning for diff? (optional)
-
-
-def fscore_torch(pred,
-                 target,
-                 tau: float = 0.05,
-                 reduction: str = "mean"):
-    _ensure_torch()
-    import torch
+def fscore_torch(pred, target, tau: float = 0.05, reduction: str = "mean"):
+    if not TORCH_AVAILABLE:
+        raise ImportError("PyTorch not available.")
 
     if pred.ndim == 2:
         pred = pred.unsqueeze(0)
@@ -146,56 +121,69 @@ def fscore_torch(pred,
     raise ValueError("Invalid reduction type.")
 
 
+def emd_torch(pred, target, eps=0.005, iterations=1000):
+    if not TORCH_AVAILABLE:
+        raise ImportError("PyTorch not available.")
+
+    if not EMD_AVAILABLE:
+        pred_np = pred.detach().cpu().numpy()
+        target_np = target.detach().cpu().numpy()
+        return torch.tensor(emd_np(pred_np, target_np))
+
+    if pred.ndim == 2:
+        pred = pred.unsqueeze(0)
+    if target.ndim == 2:
+        target = target.unsqueeze(0)
+
+    emd = emdModule()
+    dist = emd(pred, target, eps, iterations)
+    return dist.mean()
+
+
 def _load_points(path: str) -> np.ndarray:
     ext = os.path.splitext(path)[1].lower()
     if ext == ".npy":
-        arr = np.load(path)
-        arr = np.asarray(arr, dtype=np.float32)
-        if arr.ndim != 2 or arr.shape[1] != 3:
-            raise ValueError("NumPy file must have shape (N, 3).")
+        arr = np.load(path).astype(np.float32)
         return arr
     if ext in (".ply", ".pcd", ".xyz"):
         import open3d as o3d
-        pcd = o3d.io.read_point_cloud(path)
-        pts = np.asarray(pcd.points, dtype=np.float32)
-        if pts.ndim != 2 or pts.shape[1] != 3:
-            raise ValueError("Point cloud file must contain (N, 3) points.")
-        return pts
-    raise ValueError(f"Unsupported file extension: {ext}")
+        pc = o3d.io.read_point_cloud(path)
+        return np.asarray(pc.points, dtype=np.float32)
+    raise ValueError(f"Unsupported file type: {ext}")
 
 
 def _demo():
-    print("NumPy metrics demo")
     gt = np.array([[0, 0, 0],
                    [1, 0, 0],
                    [0, 1, 0]], dtype=np.float32)
     pred = gt + 0.01
 
     cd = chamfer_distance_np(pred, gt)
-    f, p, r = fscore_np(pred, gt, tau=0.05)
+    f, p, r = fscore_np(pred, gt)
+    emd = emd_np(pred, gt)
 
-    print(f"Chamfer Distance: {cd:.6f}")
-    print(f"F-score: {f:.4f}, Precision: {p:.4f}, Recall: {r:.4f}")
+    print(f"CD: {cd:.6f}")
+    print(f"F-score: {f:.4f}, P={p:.4f}, R={r:.4f}")
+    print(f"EMD: {emd:.6f}")
 
     if TORCH_AVAILABLE:
-        print("\nPyTorch metrics demo")
-        import torch
-        gt_t = torch.from_numpy(gt)
-        pred_t = torch.from_numpy(pred)
-        cd_t = chamfer_distance_torch(pred_t, gt_t)
-        f_t, p_t, r_t = fscore_torch(pred_t, gt_t, tau=0.05)
-        print(f"Chamfer Distance (Torch): {cd_t.item():.6f}")
+        t_pred = torch.from_numpy(pred)
+        t_gt = torch.from_numpy(gt)
+        cd_t = chamfer_distance_torch(t_pred, t_gt)
+        f_t, p_t, r_t = fscore_torch(t_pred, t_gt)
+        emd_t = emd_torch(t_pred, t_gt)
+
+        print(f"CD (Torch): {cd_t.item():.6f}")
         print(f"F-score (Torch): F={f_t.item():.4f}, P={p_t.item():.4f}, R={r_t.item():.4f}")
-    else:
-        print("PyTorch not available.")
+        print(f"EMD (Torch): {emd_t.item():.6f}")
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--gt", type=str, help="Path to ground truth point cloud (.ply or .npy)")
-    parser.add_argument("--pred", type=str, help="Path to predicted point cloud (.ply or .npy)")
-    parser.add_argument("--tau", type=float, default=0.05, help="Distance threshold for F-score")
-    parser.add_argument("--use_torch", action="store_true", help="Also compute Torch metrics if available")
+    parser.add_argument("--gt", type=str)
+    parser.add_argument("--pred", type=str)
+    parser.add_argument("--tau", type=float, default=0.05)
+    parser.add_argument("--use_torch", action="store_true")
     args = parser.parse_args()
 
     if args.gt is None or args.pred is None:
@@ -205,24 +193,27 @@ def main():
     gt = _load_points(args.gt)
     pred = _load_points(args.pred)
 
-    print("NumPy metrics")
+    print("NumPy Metrics:")
     cd = chamfer_distance_np(pred, gt)
     f, p, r = fscore_np(pred, gt, tau=args.tau)
-    print(f"Chamfer Distance: {cd:.6f}")
-    print(f"F-score: {f:.4f}, Precision: {p:.4f}, Recall: {r:.4f}")
+    emd = emd_np(pred, gt)
 
-    if args.use_torch:
-        if not TORCH_AVAILABLE:
-            print("PyTorch not available, skipping Torch metrics.")
-        else:
-            import torch
-            print("\nPyTorch metrics")
-            gt_t = torch.from_numpy(gt)
-            pred_t = torch.from_numpy(pred)
-            cd_t = chamfer_distance_torch(pred_t, gt_t)
-            f_t, p_t, r_t = fscore_torch(pred_t, gt_t, tau=args.tau)
-            print(f"Chamfer Distance (Torch): {cd_t.item():.6f}")
-            print(f"F-score (Torch): F={f_t.item():.4f}, P={p_t.item():.4f}, R={r_t.item():.4f}")
+    print(f"Chamfer Distance: {cd:.6f}")
+    print(f"F-score: {f:.4f}, Precision={p:.4f}, Recall={r:.4f}")
+    print(f"EMD: {emd:.6f}")
+
+    if args.use_torch and TORCH_AVAILABLE:
+        print("\nTorch Metrics:")
+        t_pred = torch.from_numpy(pred)
+        t_gt = torch.from_numpy(gt)
+
+        cd_t = chamfer_distance_torch(t_pred, t_gt)
+        f_t, p_t, r_t = fscore_torch(t_pred, t_gt)
+        emd_t = emd_torch(t_pred, t_gt)
+
+        print(f"Chamfer Distance (Torch): {cd_t.item():.6f}")
+        print(f"F-score (Torch): F={f_t.item():.4f}, P={p_t.item():.4f}, R={r_t.item():.4f}")
+        print(f"EMD (Torch): {emd_t.item():.6f}")
 
 
 if __name__ == "__main__":
