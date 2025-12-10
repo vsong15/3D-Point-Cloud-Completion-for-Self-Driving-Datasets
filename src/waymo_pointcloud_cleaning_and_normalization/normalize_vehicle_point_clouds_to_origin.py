@@ -5,7 +5,7 @@ import open3d as o3d
 INPUT_FOLDER = "waymo_preprocessing/waymo_vehicle_cleaned_pointclouds/extracted_50_min_points_updated_cleaned"
 OUTPUT_FOLDER = "waymo_preprocessing/waymo_vehicle_normalized_pointclouds/extracted_50_min_points_updated_normalized"
 
-MIN_POINTS = 1000
+MIN_POINTS = 800
 MAX_DIAGONAL = 6.0
 
 def is_valid(pc, min_points=MIN_POINTS, max_diagonal=MAX_DIAGONAL):

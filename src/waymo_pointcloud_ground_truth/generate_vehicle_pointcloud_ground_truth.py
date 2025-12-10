@@ -3,8 +3,8 @@ import numpy as np
 import open3d as o3d
 from scipy.spatial import cKDTree
 
-INPUT_FOLDER = "waymo_vehicle_normalized_pointclouds/all_vehicle_point_clouds_1000_min_points_normalized"
-GROUND_TRUTH_FOLDER = "waymo_vehicle_ground_truth_occluded/all_vehicle_point_clouds_1000_min_points_occluded_gt"
+INPUT_FOLDER = "waymo_preprocessing/waymo_vehicle_normalized_pointclouds/extracted_50_min_points_updated_normalized"
+GROUND_TRUTH_FOLDER = "waymo_preprocessing/waymo_vehicle_ground_truth_occluded_pointclouds/extracted_50_min_points_updated_occluded_gt"
 INCOMPLETE_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "incomplete").replace("\\", "/")
 COMPLETED_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "completed").replace("\\", "/")
 
