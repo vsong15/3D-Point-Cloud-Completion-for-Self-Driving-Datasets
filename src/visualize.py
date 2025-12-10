@@ -1,41 +1,41 @@
 """
 HOW TO RUN
-python visualize_triplet.py \
-    --partial waymo_final_dataset_splits_normalized/test/incomplete/0001.ply \
-    --pred    predictions/0001.ply \
-    --gt      waymo_final_dataset_splits_normalized/test/completed/0001.ply
+python visualize_pair.py \
+  --occluded waymo_final_dataset_splits_normalized/test/incomplete/0001.ply \
+  --completed predictions/0001.ply
 
 """
 
 import open3d as o3d
-import numpy as np
-import os
 import argparse
 
-def load_pc(path):
+
+def load_pc(path, color=None):
     pc = o3d.io.read_point_cloud(path)
-    pc.paint_uniform_color([0.0, 0.0, 0.0])
+    if color is not None:
+        pc.paint_uniform_color(color)
     return pc
 
-def visualize_triplet(partial_path, pred_path, gt_path):
-    partial = load_pc(partial_path)
-    pred = load_pc(pred_path)
-    gt = load_pc(gt_path)
 
-    # Move clouds to left, center, right
-    partial.translate([-2, 0, 0])
-    gt.translate([2, 0, 0])
+def visualize_pair(occluded_path, completed_path):
+    occluded = load_pc(occluded_path, color=[1.0, 0.0, 0.0])   # red
+    completed = load_pc(completed_path, color=[0.0, 1.0, 0.0]) # green
+
+    occluded.translate([-1.5, 0.0, 0.0])
+    completed.translate([1.5, 0.0, 0.0])
 
     o3d.visualization.draw_geometries(
-        [partial, pred, gt],
-        window_name="Partial (Left) | Predicted (Center) | Ground Truth (Right)"
+        [occluded, completed],
+        window_name="Occluded Input (Left) | Completed Output (Right)"
     )
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--partial", required=True)
-    parser.add_argument("--pred", required=True)
-    parser.add_argument("--gt", required=True)
+    parser.add_argument("--occluded", required=True,
+                        help="Path to occluded / partial input point cloud (.ply or .pcd)")
+    parser.add_argument("--completed", required=True,
+                        help="Path to completed model output point cloud (.ply or .pcd)")
     args = parser.parse_args()
 
-    visualize_triplet(args.partial, args.pred, args.gt)
+    visualize_pair(args.occluded, args.completed)
