@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 from scipy.spatial import cKDTree
 
-GROUND_TRUTH_FOLDER = "waymo_final_data_splits_updated_normalized/train"
+GROUND_TRUTH_FOLDER = "waymo_final_data_splits_updated/train"
 INCOMPLETE_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "incomplete").replace("\\", "/")
 COMPLETED_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "completed").replace("\\", "/")
 
@@ -16,19 +16,21 @@ def visualize_side_by_side(incomplete_path, complete_path):
         return
     
     incomplete_pc.paint_uniform_color([1, 0, 0])
+    
     incomplete_pts = np.asarray(incomplete_pc.points)
     complete_pts = np.asarray(complete_pc.points)
     
     tree = cKDTree(incomplete_pts)
     dists, _ = tree.query(complete_pts, k=1)
-    occluded_mask = dists > 0.01
     
+    occluded_mask = dists > 0.01
     occluded_pc = o3d.geometry.PointCloud()
     occluded_pc.points = o3d.utility.Vector3dVector(complete_pts[occluded_mask])
     occluded_pc.paint_uniform_color([1, 0, 1])
     
+    visible_mask = ~occluded_mask
     visible_pc = o3d.geometry.PointCloud()
-    visible_pc.points = o3d.utility.Vector3dVector(complete_pts[~occluded_mask])
+    visible_pc.points = o3d.utility.Vector3dVector(complete_pts[visible_mask])
     visible_pc.paint_uniform_color([0, 1, 0])
     
     translate_dist = 0.8
