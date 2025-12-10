@@ -1,0 +1,11 @@
+# Ignore large dataset files
+data/
+vehicles_out*/
+__pycache__/
+*.pyc
+*.tfrecord
+*.parquet
+*.zip
+*.tar
+*.npz
+*.jpg
