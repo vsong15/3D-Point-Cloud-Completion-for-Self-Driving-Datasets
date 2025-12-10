@@ -4,24 +4,29 @@ import open3d as o3d
 from sklearn.cluster import DBSCAN
 
 FILE_PATH = None
-FOLDER_PATH = "waymo_vehicle_incomplete_pointclouds/all_vehicle_point_clouds_50_min_points"
-OUTPUT_FOLDER = "waymo_vehicle_cleaned_pointclouds/all_vehicle_point_clouds_50_min_points_cleaned"
-MAX_DIAGONAL = 4.0
-PLANAR_THRESHOLD = 0.01  
+FOLDER_PATH = "waymo_preprocessing/waymo_vehicle_extracted_pointclouds/extracted_50_min_points_updated"
+OUTPUT_FOLDER = "waymo_preprocessing/waymo_vehicle_cleaned_pointclouds/extracted_50_min_points_updated_cleaned"
+MAX_DIAGONAL = 6.0
 
 def clean_points(pc):
-    pc, _ = pc.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
-    pc = pc.voxel_down_sample(voxel_size=0.05)
+    pc, _ = pc.remove_statistical_outlier(nb_neighbors=10, std_ratio=3.0)
     return pc
 
-def has_single_cluster(pc, eps=0.5, min_samples=10):
+def keep_largest_cluster(pc, eps=0.4, min_samples=5):
     pts = np.asarray(pc.points)
     if len(pts) == 0:
-        return False
+        return pc
     clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(pts)
     labels = clustering.labels_
-    n_clusters = len(set(labels)) - (1 if -1 in labels else 0)
-    return n_clusters == 1
+    unique = np.unique(labels[labels >= 0])
+    if len(unique) == 0:
+        return pc
+    largest_label = max(unique, key=lambda lbl: np.sum(labels == lbl))
+    mask = labels == largest_label
+    filtered_pts = pts[mask]
+    new_pc = o3d.geometry.PointCloud()
+    new_pc.points = o3d.utility.Vector3dVector(filtered_pts)
+    return new_pc
 
 def is_compact(pc, max_diagonal=MAX_DIAGONAL):
     pts = np.asarray(pc.points)
@@ -31,22 +36,11 @@ def is_compact(pc, max_diagonal=MAX_DIAGONAL):
     diag = np.linalg.norm(bbox)
     return diag <= max_diagonal
 
-def is_planar(pc, threshold=PLANAR_THRESHOLD):
-    pts = np.asarray(pc.points)
-    if len(pts) < 3:
-        return True
-    cov = np.cov(pts.T)
-    eigvals = np.linalg.eigvalsh(cov)
-    return eigvals[0] / eigvals[2] < threshold  
-
 def process_file(path):
     pc = o3d.io.read_point_cloud(path)
     pc = clean_points(pc)
-    if not has_single_cluster(pc):
-        return None
+    pc = keep_largest_cluster(pc)
     if not is_compact(pc):
-        return None
-    if is_planar(pc):
         return None
     pc.paint_uniform_color([1.0, 0.0, 0.0])
     return pc

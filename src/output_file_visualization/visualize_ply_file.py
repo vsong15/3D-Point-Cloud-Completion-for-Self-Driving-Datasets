@@ -2,7 +2,7 @@ import os
 import open3d as o3d
 
 FILE_PATH = None
-FOLDER_PATH = "waymo_vehicle_incomplete_pointclouds/all_vehicle_point_clouds_50_min_points_updated_bb"
+FOLDER_PATH = "waymo_preprocessing/waymo_vehicle_cleaned_pointclouds/extracted_50_min_points_updated_cleaned"
 
 def visualize_single(file_path):
     pc = o3d.io.read_point_cloud(file_path)
