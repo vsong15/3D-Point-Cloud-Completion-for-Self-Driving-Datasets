@@ -3,33 +3,9 @@ import open3d as o3d
 import numpy as np
 from scipy.spatial import cKDTree
 
-GROUND_TRUTH_FOLDER = "waymo_final_dataset_splits/train"
+GROUND_TRUTH_FOLDER = "waymo_preprocessing/waymo_vehicle_ground_truth_occluded_pointclouds/extracted_50_min_points_updated_occluded_gt"
 INCOMPLETE_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "incomplete").replace("\\", "/")
 COMPLETED_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "completed").replace("\\", "/")
-
-OCCLUDER_SIZE = np.array([1.8, 4.5, 2.0])
-OCCLUDER_DISTANCE = 1.0
-OCCLUDER_OFFSET_Y = 0.0
-OCCLUDER_OFFSET_Z = 0.0
-
-def add_label(text, position):
-    mesh = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.2)
-    mesh.translate(position)
-    return mesh
-
-def create_occluder_box(pc):
-    pts = np.asarray(pc.points)
-    if len(pts) == 0:
-        return None
-    min_bounds = pts.min(axis=0)
-    max_bounds = pts.max(axis=0)
-    center = (min_bounds + max_bounds) / 2
-
-    occ_min = center + np.array([-OCCLUDER_SIZE[0]/2, max_bounds[1]/2 + OCCLUDER_DISTANCE, -OCCLUDER_SIZE[2]/2])
-    occ_max = occ_min + OCCLUDER_SIZE
-    bbox = o3d.geometry.AxisAlignedBoundingBox(min_bound=occ_min, max_bound=occ_max)
-    bbox.color = (1, 1, 0)  
-    return bbox
 
 def visualize_side_by_side(incomplete_path, complete_path):
     incomplete_pc = o3d.io.read_point_cloud(incomplete_path)
@@ -40,7 +16,6 @@ def visualize_side_by_side(incomplete_path, complete_path):
         return
     
     incomplete_pc.paint_uniform_color([1, 0, 0])
-    
     incomplete_pts = np.asarray(incomplete_pc.points)
     complete_pts = np.asarray(complete_pc.points)
     
@@ -50,20 +25,16 @@ def visualize_side_by_side(incomplete_path, complete_path):
     
     occluded_pc = o3d.geometry.PointCloud()
     occluded_pc.points = o3d.utility.Vector3dVector(complete_pts[occluded_mask])
-    occluded_pc.paint_uniform_color([1, 0, 1])  
+    occluded_pc.paint_uniform_color([1, 0, 1])
     
     visible_pc = o3d.geometry.PointCloud()
     visible_pc.points = o3d.utility.Vector3dVector(complete_pts[~occluded_mask])
-    visible_pc.paint_uniform_color([0, 1, 0])  
+    visible_pc.paint_uniform_color([0, 1, 0])
     
-    incomplete_pc.translate((-3, 0, 0))
-    visible_pc.translate((3, 0, 0.2))
-    occluded_pc.translate((3, 0, 0.2 + 0.05)) 
-    
-    coord_incomplete = add_label("Incomplete", (-3, 1.5, 0))
-    coord_complete = add_label("Complete", (3, 1.5, 0))
-    
-    occluder_box = create_occluder_box(complete_pc)
+    translate_dist = 0.8
+    incomplete_pc.translate((-translate_dist, 0, 0))
+    visible_pc.translate((translate_dist, 0, 0))
+    occluded_pc.translate((translate_dist, 0, 0.05))
     
     vis = o3d.visualization.Visualizer()
     vis.create_window(
@@ -73,14 +44,10 @@ def visualize_side_by_side(incomplete_path, complete_path):
     vis.add_geometry(incomplete_pc)
     vis.add_geometry(visible_pc)
     vis.add_geometry(occluded_pc)
-    vis.add_geometry(coord_incomplete)
-    vis.add_geometry(coord_complete)
-    if occluder_box is not None:
-        vis.add_geometry(occluder_box)
     
     render_opt = vis.get_render_option()
     render_opt.point_size = 5.0
-    render_opt.background_color = np.array([0, 0, 0])
+    render_opt.background_color = np.array([1, 1, 1])
     
     vis.run()
     vis.destroy_window()
