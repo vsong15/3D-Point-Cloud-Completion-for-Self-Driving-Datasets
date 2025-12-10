@@ -3,7 +3,7 @@ import open3d as o3d
 import numpy as np
 from scipy.spatial import cKDTree
 
-GROUND_TRUTH_FOLDER = "waymo_preprocessing/waymo_vehicle_ground_truth_occluded_pointclouds/extracted_50_min_points_updated_occluded_gt"
+GROUND_TRUTH_FOLDER = "waymo_final_data_splits_updated_normalized/train"
 INCOMPLETE_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "incomplete").replace("\\", "/")
 COMPLETED_FOLDER = os.path.join(GROUND_TRUTH_FOLDER, "completed").replace("\\", "/")
 
