@@ -2,8 +2,8 @@ import os
 import numpy as np
 import open3d as o3d
 
-ROOT_FOLDER = "waymo_final_dataset_splits"
-OUTPUT_FOLDER = "waymo_final_dataset_splits_normalized"
+ROOT_FOLDER = "waymo_final_data_splits_updated"
+OUTPUT_FOLDER = "waymo_final_data_splits_updated_normalized"
 
 def normalize_unit_sphere(pc):
     """Normalize a point cloud so all points lie in [-1, 1] in XYZ."""
