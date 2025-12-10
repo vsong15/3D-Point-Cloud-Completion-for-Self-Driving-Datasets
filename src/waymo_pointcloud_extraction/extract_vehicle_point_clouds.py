@@ -4,8 +4,6 @@ import numpy as np
 import open3d as o3d
 import pyarrow.parquet as pq
 from sklearn.cluster import DBSCAN
-import matplotlib
-import matplotlib.cm as cm
 
 LIDAR_DIR = "data/training/254_training_lidar"
 BOX_DIR = "data/training/254_training_lidar_box"
@@ -64,19 +62,21 @@ def read_lidar_points(parquet_path, target_timestamp=None):
             z = df["[LiDARComponent].cartesian.z"].iloc[idx]
             all_pts.append(np.stack([x, y, z], axis=-1))
             continue
-        except: pass
+        except:
+            pass
         for rname in ["range_image_return1", "range_image_return2"]:
             vals = df[f"[LiDARComponent].{rname}.values"].iloc[idx]
             shape = df[f"[LiDARComponent].{rname}.shape"].iloc[idx]
             if vals is not None and shape is not None:
                 xyz = process_range_image(vals, shape)
-                if xyz is not None: all_pts.append(xyz)
+                if xyz is not None:
+                    all_pts.append(xyz)
     if not all_pts:
         print("No LiDAR points found.")
         return None
     points = np.vstack(all_pts)
     points[:, 2] -= LIDAR_HEIGHT
-    pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points))
+    pcd = o3d.geometry.PointCloud(o3d.utility.Vector3dVector(points.astype(np.float64)))
     pcd.paint_uniform_color(DEFAULT_COLOR)
     pcd = pcd.voxel_down_sample(0.05)
     print(f"Total LiDAR points loaded: {len(pcd.points)}")
@@ -100,12 +100,16 @@ def read_lidar_boxes(parquet_path, target_timestamp=None):
     df = df[df["key.frame_timestamp_micros"] == target_timestamp]
     obbs, colors, types = [], [], []
     for _, row in df.iterrows():
-        center = np.array([-row["[LiDARBoxComponent].box.center.x"] + SHIFT_X,
-                            row["[LiDARBoxComponent].box.center.y"],
-                            row["[LiDARBoxComponent].box.center.z"] - LIDAR_HEIGHT + SHIFT_Z])
-        size = np.array([row["[LiDARBoxComponent].box.size.x"],
-                         row["[LiDARBoxComponent].box.size.y"],
-                         row["[LiDARBoxComponent].box.size.z"]])
+        center = np.array([
+            -row["[LiDARBoxComponent].box.center.x"] + SHIFT_X,
+             row["[LiDARBoxComponent].box.center.y"],
+             row["[LiDARBoxComponent].box.center.z"] - LIDAR_HEIGHT + SHIFT_Z
+        ])
+        size = np.array([
+            row["[LiDARBoxComponent].box.size.x"],
+            row["[LiDARBoxComponent].box.size.y"],
+            row["[LiDARBoxComponent].box.size.z"]
+        ])
         heading = np.pi - row["[LiDARBoxComponent].box.heading"]
         t = row["[LiDARBoxComponent].type"]
         obbs.append(get_box_obb(center, size, heading))
@@ -121,7 +125,8 @@ def assign_box_colors(pcd, obbs, box_colors):
     labels = clustering.labels_
     for obb, color in zip(obbs, box_colors):
         inside = obb.get_point_indices_within_bounding_box(pcd.points)
-        if not inside: continue
+        if not inside:
+            continue
         touched = set(labels[inside])
         touched.discard(-1)
         for c in touched:
@@ -135,47 +140,69 @@ def extract_top_vehicles(pcd, obbs, box_colors, box_types, top_n=TOP_N, min_poin
     colors = np.asarray(pcd.colors)
     vehicles = []
     for obb, color, t in zip(obbs, box_colors, box_types):
-        if t != 1: continue
+        if t != 1:
+            continue
         inside_idx = obb.get_point_indices_within_bounding_box(pcd.points)
-        if len(inside_idx) < min_points: continue
+        if len(inside_idx) < min_points:
+            continue
         veh_pcd = o3d.geometry.PointCloud()
-        veh_pcd.points = o3d.utility.Vector3dVector(points[inside_idx])
-        veh_pcd.colors = o3d.utility.Vector3dVector(colors[inside_idx])
+        veh_pcd.points = o3d.utility.Vector3dVector(points[inside_idx].astype(np.float64))
+        veh_pcd.colors = o3d.utility.Vector3dVector(colors[inside_idx].astype(np.float64))
         vehicles.append((veh_pcd, len(inside_idx)))
     vehicles.sort(key=lambda x: x[1], reverse=True)
     print(f"Top {len(vehicles[:top_n])} vehicles extracted")
     return [v[0] for v in vehicles[:top_n]]
 
+def save_pcd_safe(pcd, path):
+    if len(pcd.points) == 0:
+        print(f"Skipping empty point cloud: {path}")
+        return False
+    pcd.points = o3d.utility.Vector3dVector(np.asarray(pcd.points, dtype=np.float64))
+    pcd.colors = o3d.utility.Vector3dVector(np.asarray(pcd.colors, dtype=np.float64))
+    success = o3d.io.write_point_cloud(path, pcd, write_ascii=True)
+    if not success:
+        print(f"Failed to write: {path}")
+    return success
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     os.makedirs(ALL_VEH_DIR, exist_ok=True)
+
     lidar_files = sorted(os.listdir(LIDAR_DIR))
-    box_files   = sorted(os.listdir(BOX_DIR))
+    box_files = sorted(os.listdir(BOX_DIR))
     lidar_dict = {extract_id(f): f for f in lidar_files}
-    box_dict   = {extract_id(f): f for f in box_files}
+    box_dict = {extract_id(f): f for f in box_files}
     ids = sorted(set(lidar_dict.keys()) & set(box_dict.keys()))
     print(f"Found {len(ids)} matching LiDAR/box file pairs.")
+
     global_vehicle_counter = 1
     for id_str in ids:
         print(f"\nProcessing ID: {id_str}")
         lidar_path = os.path.join(LIDAR_DIR, lidar_dict[id_str]).replace("\\","/")
         box_path = os.path.join(BOX_DIR, box_dict[id_str]).replace("\\","/")
+
         pcd = read_lidar_points(lidar_path)
         obbs, colors, types = read_lidar_boxes(box_path)
         if pcd is None or not obbs:
             print("Skipping — missing data.")
             continue
+
         pcd = assign_box_colors(pcd, obbs, colors)
         vehicles = extract_top_vehicles(pcd, obbs, colors, types)
+        if not vehicles:
+            print(f"No vehicles extracted for ID {id_str}")
+            continue
+
         id_out_dir = os.path.join(OUTPUT_DIR, id_str)
         os.makedirs(id_out_dir, exist_ok=True)
+
         for i, veh in enumerate(vehicles, start=1):
             local_path = os.path.join(id_out_dir, f"vehicle_{i:02d}.ply")
-            o3d.io.write_point_cloud(local_path, veh)
             global_path = os.path.join(ALL_VEH_DIR, f"vehicle_{id_str}_{global_vehicle_counter:04d}.ply")
-            o3d.io.write_point_cloud(global_path, veh)
-            print(f"Saved vehicle {i} for ID {id_str} — global count: {global_vehicle_counter}")
-            global_vehicle_counter += 1
+            if save_pcd_safe(veh, local_path) and save_pcd_safe(veh, global_path):
+                print(f"Saved vehicle {i} for ID {id_str} — global count: {global_vehicle_counter}")
+                global_vehicle_counter += 1
+
     print("\nDONE — all vehicles extracted!")
 
 if __name__ == "__main__":
