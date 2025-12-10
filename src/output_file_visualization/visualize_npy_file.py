@@ -3,7 +3,7 @@ import numpy as np
 import open3d as o3d
 
 FILE_PATH = None
-FOLDER_PATH = "inference_result"
+FOLDER_PATH = "inference_result_non_fine_tuned_incomplete"
 
 def visualize_array(arr, title):
     pc = o3d.geometry.PointCloud()
