@@ -1,3 +1,12 @@
+"""
+HOW TO RUN
+python evaluation_metrics.py \
+    --gt path/to/gt_cloud.npy \
+    --pred path/to/pred_cloud.npy
+
+    ground truth vs predicted
+"""
+
 from typing import Tuple
 import argparse
 import os
