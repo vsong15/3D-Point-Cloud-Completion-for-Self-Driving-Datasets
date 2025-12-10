@@ -1,6 +1,8 @@
 import numpy as np
 import open3d as o3d
 import pyarrow.parquet as pq
+import matplotlib
+import matplotlib.cm as cm
 
 LIDAR_HEIGHT = 2.0  
 
@@ -49,7 +51,17 @@ def read_lidar_points(parquet_path, target_timestamp=None):
 
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
-        pcd.paint_uniform_color([0.7, 0.7, 0.7])
+        
+        # Color by height
+        z = points[:, 2]
+        min_z = np.min(z)
+        max_z = np.max(z)
+        norm_z = (z - min_z) / (max_z - min_z + 1e-10)
+        
+        cmap = matplotlib.colormaps["jet"]
+        colors = cmap(norm_z)[:, :3]
+        pcd.colors = o3d.utility.Vector3dVector(colors)
+
         pcd = pcd.voxel_down_sample(0.05)
         print(f"Total LiDAR points loaded: {len(pcd.points)}")
         return pcd
@@ -132,6 +144,7 @@ def read_lidar_boxes(parquet_path, target_timestamp=None):
         df = df[df["key.frame_timestamp_micros"] == target_timestamp]
 
         boxes = []
+        box_params = []
         for _, row in df.iterrows():
             obj_type = row["[LiDARBoxComponent].type"]
             color = TYPE_COLOR.get(obj_type, [1,1,1])
@@ -140,14 +153,14 @@ def read_lidar_boxes(parquet_path, target_timestamp=None):
             center_z = row["[LiDARBoxComponent].box.center.z"] - LIDAR_HEIGHT
 
             SHIFT_X = 1.6
-            SHIFT_Z = -3.0
+            SHIFT_Z = -3.25
             center = [
                 center_x + SHIFT_X,
                 row["[LiDARBoxComponent].box.center.y"],
                 center_z + SHIFT_Z  
             ]
 
-            heading = row["[LiDARBoxComponent].box.heading"] + np.pi
+            heading = np.pi - row["[LiDARBoxComponent].box.heading"]
 
             size = [
                 row["[LiDARBoxComponent].box.size.x"],
@@ -157,12 +170,124 @@ def read_lidar_boxes(parquet_path, target_timestamp=None):
 
             line_set, _ = create_box_lines(center, size, heading, color)
             boxes.append(line_set)
+            
+            # Store params for analysis
+            box_params.append({
+                'center': np.array(center),
+                'size': np.array(size),
+                'heading': heading,
+                'type': obj_type,
+                'color': color
+            })
 
         print(f"Total boxes loaded: {len(boxes)}")
-        return boxes
+        return boxes, box_params
     except Exception as e:
         print(f"Error reading LiDAR boxes: {e}")
+        return [], []
+
+def get_local_points(points, center, heading):
+    diff = points - center
+    c = np.cos(heading)
+    s = np.sin(heading)
+    # Inverse rotation (transpose)
+    x = diff[:, 0] * c + diff[:, 1] * s
+    y = diff[:, 0] * -s + diff[:, 1] * c
+    z = diff[:, 2]
+    return np.stack([x, y, z], axis=-1)
+
+def align_boxes(pcd, box_params):
+    if pcd is None or not box_params:
         return []
+
+    points = np.asarray(pcd.points)
+    aligned_geometries = []
+    
+    print("\n--- Auto-Aligning Boxes ---")
+    
+    for i, box in enumerate(box_params):
+        center = box['center']
+        size = box['size']
+        heading = box['heading']
+        color = box.get('color', [1, 0, 0])
+        obj_type = box['type']
+        
+        # Only align vehicles (Type 1)
+        if obj_type == 1:
+            # --- Z Alignment ---
+            # Create a tall search region (column) to find points above/below
+            R = o3d.geometry.OrientedBoundingBox.get_rotation_matrix_from_axis_angle(np.array([0, 0, heading]))
+            
+            # Search column: slightly larger X/Y to catch points just outside, tall Z
+            search_size = size.copy()
+            search_size[0] += 1.0 # Expand search in X
+            search_size[1] += 1.0 # Expand search in Y
+            search_size[2] = 5.0 
+            
+            # Center the search column at the current box center
+            obb = o3d.geometry.OrientedBoundingBox(center, R, search_size)
+            
+            # Get points inside this column
+            indices = obb.get_point_indices_within_bounding_box(pcd.points)
+            
+            if len(indices) >= 10:
+                box_points = points[indices]
+                
+                # 1. Z Alignment
+                min_z_points = np.percentile(box_points[:, 2], 1)
+                current_box_bottom = center[2] - size[2]/2
+                diff_z = min_z_points - current_box_bottom
+                
+                if abs(diff_z) < 2.0: 
+                    center[2] += diff_z
+                    print(f"Vehicle {i}: Adjusted Z by {diff_z:.3f}m")
+                
+                # 2. X/Y Alignment (Containment)
+                # Transform points to local box coordinates
+                local_pts = get_local_points(box_points, center, heading)
+                
+                # Box boundaries in local coords
+                min_bx, max_bx = -size[0]/2, size[0]/2
+                min_by, max_by = -size[1]/2, size[1]/2
+                
+                # Point boundaries (robust)
+                min_px = np.percentile(local_pts[:, 0], 1)
+                max_px = np.percentile(local_pts[:, 0], 99)
+                min_py = np.percentile(local_pts[:, 1], 1)
+                max_py = np.percentile(local_pts[:, 1], 99)
+                
+                # Check for overflow (points outside box)
+                # If points are significantly outside, shift box to cover them
+                shift_x = 0
+                shift_y = 0
+                
+                # X Axis
+                if min_px < min_bx: # Overflow Left
+                    shift_x += (min_px - min_bx)
+                if max_px > max_bx: # Overflow Right
+                    shift_x += (max_px - max_bx)
+                    
+                # Y Axis
+                if min_py < min_by: # Overflow Back
+                    shift_y += (min_py - min_by)
+                if max_py > max_by: # Overflow Front
+                    shift_y += (max_py - max_by)
+                
+                # Apply shifts if they are reasonable
+                if abs(shift_x) > 0.05 and abs(shift_x) < 1.0:
+                    # Rotate shift back to global
+                    global_shift_x = shift_x * np.cos(heading) - shift_y * np.sin(heading)
+                    global_shift_y = shift_x * np.sin(heading) + shift_y * np.cos(heading)
+                    
+                    center[0] += global_shift_x
+                    center[1] += global_shift_y
+                    print(f"Vehicle {i}: Adjusted X/Y by local ({shift_x:.3f}, {shift_y:.3f})")
+
+        # Recreate geometry with (potentially) updated center
+        line_set, _ = create_box_lines(center, size, heading, color)
+        aligned_geometries.append(line_set)
+
+    return aligned_geometries
 
 def visualize(pcd, boxes):
     geometries = []
@@ -184,8 +309,11 @@ def main():
     timestamp = int(sys.argv[3]) if len(sys.argv) > 3 else None
 
     pcd = read_lidar_points(lidar_path, timestamp)
-    boxes = read_lidar_boxes(boxes_path, timestamp)
-    visualize(pcd, boxes)
+    _, box_params = read_lidar_boxes(boxes_path, timestamp)
+    
+    aligned_boxes = align_boxes(pcd, box_params)
+    
+    visualize(pcd, aligned_boxes)
 
 if __name__ == "__main__":
     main()
