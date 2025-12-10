@@ -2,11 +2,11 @@ import os
 import numpy as np
 import open3d as o3d
 
-INPUT_FOLDER = "waymo_vehicle_cleaned_pointclouds/all_vehicle_point_clouds_1000_min_points_cleaned"
-OUTPUT_FOLDER = "waymo_vehicle_normalized_pointclouds/all_vehicle_point_clouds_1000_min_points_normalized"
+INPUT_FOLDER = "waymo_preprocessing/waymo_vehicle_cleaned_pointclouds/extracted_50_min_points_updated_cleaned"
+OUTPUT_FOLDER = "waymo_preprocessing/waymo_vehicle_normalized_pointclouds/extracted_50_min_points_updated_normalized"
 
 MIN_POINTS = 1000
-MAX_DIAGONAL = 4.0
+MAX_DIAGONAL = 6.0
 
 def is_valid(pc, min_points=MIN_POINTS, max_diagonal=MAX_DIAGONAL):
     pts = np.asarray(pc.points)
@@ -18,8 +18,11 @@ def is_valid(pc, min_points=MIN_POINTS, max_diagonal=MAX_DIAGONAL):
 
 def normalize_to_origin(pc):
     pts = np.asarray(pc.points)
-    centroid = pts.mean(axis=0)
-    pts -= centroid
+    min_corner = pts.min(axis=0)
+    pts -= min_corner
+    diag = np.linalg.norm(pts.max(axis=0) - pts.min(axis=0))
+    if diag > 0:
+        pts /= diag
     pc.points = o3d.utility.Vector3dVector(pts)
     pc.paint_uniform_color([1.0, 0.0, 0.0])
     return pc
